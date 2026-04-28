@@ -5,11 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>棠屿·朝夕 | 协作选片</title>
     <style>
-        /* --- 沿用 index.html 核心审美 --- */
+        /* --- 全局与基础审美 --- */
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             margin: 0;
-            padding: 15px 15px 80px 15px; /* 底部留空给工具栏 */
+            padding: 15px 15px 100px 15px;
             background: linear-gradient(135deg, #eee3e3 0%, #e1cdcd 100%);
             min-height: 100vh;
             background-attachment: fixed;
@@ -44,7 +44,26 @@
             opacity: 0.8;
         }
 
-        /* --- 画廊网格与选中状态 --- */
+        /* 顶部返回主页按钮 */
+        .home-btn {
+            background-color: rgba(255,255,255,0.6);
+            color: #5c4b4b;
+            border: 1px solid rgba(92,75,75,0.2);
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: 0.3s;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+            text-decoration: none;
+            display: inline-block;
+        }
+
+            .home-btn:hover {
+                background-color: #fff;
+                transform: translateY(-2px);
+            }
+
         .gallery {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
@@ -57,7 +76,7 @@
             overflow: hidden;
             background: rgba(255, 255, 255, 0.3);
             cursor: pointer;
-            transition: transform 0.3s ease;
+            transition: 0.3s;
         }
 
             .photo-card img {
@@ -67,7 +86,18 @@
                 display: block;
             }
 
-        /* 选中标记遮罩 */
+        /* SVG 矢量对角线水印层 */
+        .watermark-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 5;
+            background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><text x='50%' y='50%' transform='rotate(-30 80 80)' fill='rgba(255,255,255,0.45)' font-size='15' font-family='sans-serif' font-weight='500' text-anchor='middle'>棠屿 tangisle.top</text></svg>");
+        }
+
         .select-badge {
             position: absolute;
             top: 0;
@@ -75,12 +105,13 @@
             width: 100%;
             height: 100%;
             background: rgba(92, 75, 75, 0.4);
-            display: none; /* 默认隐藏 */
+            display: none;
             justify-content: center;
             align-items: center;
             color: white;
             font-size: 30px;
             backdrop-filter: blur(2px);
+            z-index: 10;
         }
 
         .photo-card.is-selected .select-badge {
@@ -94,7 +125,7 @@
             left: 50%;
             transform: translateX(-50%);
             width: 90%;
-            max-width: 500px;
+            max-width: 550px;
             background: rgba(255, 255, 255, 0.85);
             backdrop-filter: blur(20px);
             padding: 12px 25px;
@@ -110,6 +141,11 @@
             color: #5c4b4b;
             font-size: 14px;
             font-weight: 500;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 10px;
         }
 
         .submit-btn {
@@ -128,7 +164,24 @@
                 cursor: not-allowed;
             }
 
-        /* --- 灯箱内选片控制 --- */
+        .reset-btn {
+            background: rgba(255, 255, 255, 0.5);
+            color: #8c7e7e;
+            border: 1px solid rgba(92, 75, 75, 0.2);
+            padding: 8px 15px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: 0.3s;
+        }
+
+            .reset-btn:hover {
+                background: #fff;
+                color: #d9534f;
+                border-color: #d9534f;
+            }
+
+        /* --- 灯箱 --- */
         .lightbox {
             position: fixed;
             top: 0;
@@ -143,13 +196,46 @@
             backdrop-filter: blur(15px);
         }
 
-        .lightbox-img {
+        .lightbox-img-wrapper {
+            position: relative;
             max-width: 90vw;
             max-height: 80vh;
-            object-fit: contain;
+            display: flex;
+            justify-content: center;
+            align-items: center;
         }
 
-        /* 左右切换按钮 */
+        .lightbox-img {
+            max-width: 100%;
+            max-height: 80vh;
+            object-fit: contain;
+            display: block;
+            transition: opacity 0.2s ease-in-out;
+        }
+
+        /* 💡 加载动画圈圈 */
+        .loader {
+            border: 4px solid rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            border-top: 4px solid #fff;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            position: absolute;
+            display: none;
+            z-index: 2002;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
         .nav-btn {
             position: absolute;
             top: 50%;
@@ -188,7 +274,7 @@
             font-size: 16px;
             cursor: pointer;
             transition: 0.3s;
-            z-index: 2001; /* 确保层级高于图片 */
+            z-index: 2001;
         }
 
             .heart-btn.active {
@@ -196,7 +282,6 @@
                 color: #5c4b4b;
             }
 
-        /* 顶部关闭 */
         .close-btn {
             position: absolute;
             top: 20px;
@@ -208,7 +293,7 @@
             z-index: 2001;
         }
 
-        /* --- 身份输入弹窗 --- */
+        /* --- 弹窗 --- */
         .modal {
             position: fixed;
             top: 0;
@@ -231,11 +316,6 @@
             text-align: center;
         }
 
-            .modal-content h3 {
-                margin-top: 0;
-                color: #5c4b4b;
-            }
-
             .modal-content input {
                 width: 100%;
                 padding: 12px;
@@ -254,36 +334,42 @@
             <h1 class="hero-title">棠屿·选片间</h1>
             <p class="hero-subtitle">Selection Space.</p>
         </div>
+        <div>
+            <button class="home-btn" onclick="window.location.href='/'">🏠 摄影师主页</button>
+        </div>
     </div>
 
     <div class="gallery" id="gallery"></div>
 
-    <div class="selection-bar">
+    <div class="selection-bar" id="selectionBar">
         <div class="selection-info">已选入 <span id="count-text">0</span> 张照片</div>
-        <button class="submit-btn" id="submitBtn" onclick="openSubmitModal()" disabled>提交选片清单</button>
+        <div class="btn-group">
+            <button class="reset-btn" id="resetBtn" onclick="resetSelection()" style="display: none;">清空已选</button>
+            <button class="submit-btn" id="submitBtn" onclick="openSubmitModal()" disabled>提交清单</button>
+        </div>
     </div>
 
     <div id="lightbox" class="lightbox" onclick="closeLightbox()">
         <span class="close-btn" onclick="closeLightbox(); event.stopPropagation();">&times;</span>
+        <button class="nav-btn prev-btn" onclick="event.stopPropagation(); changePhoto(-1)">&#10094;</button>
 
-        <button class="nav-btn prev-btn" onclick="event.stopPropagation(); changePhoto(-1)" title="上一张 (左方向键)">&#10094;</button>
+        <div class="lightbox-img-wrapper" onclick="event.stopPropagation();">
+            <div id="loadingSpinner" class="loader"></div>
+            <img id="lightboxImg" class="lightbox-img" src="">
+            <div class="watermark-layer" style="background-image: url('data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'300\' height=\'300\'><text x=\'50%\' y=\'50%\' transform=\'rotate(-30 150 150)\' fill=\'rgba(255,255,255,0.25)\' font-size=\'20\' font-family=\'sans-serif\' font-weight=\'500\' text-anchor=\'middle\'>棠屿 tangisle.top</text></svg>');"></div>
+        </div>
 
-        <img id="lightboxImg" class="lightbox-img" src="" onclick="event.stopPropagation();">
-
-        <button class="nav-btn next-btn" onclick="event.stopPropagation(); changePhoto(1)" title="下一张 (右方向键)">&#10095;</button>
-
-        <button id="heartBtn" class="heart-btn" onclick="toggleSelect(event)">
-            ❤️ 选入这张
-        </button>
+        <button class="nav-btn next-btn" onclick="event.stopPropagation(); changePhoto(1)">&#10095;</button>
+        <button id="heartBtn" class="heart-btn" onclick="toggleSelect(event)">❤️ 选入这张</button>
     </div>
 
     <div id="submitModal" class="modal">
         <div class="modal-content">
             <h3>请留下您的称呼</h3>
-            <p style="font-size: 13px; color: #888;">例如：模特小A / 伴娘 / 5.20选图</p>
+            <p style="font-size: 13px; color: #888;">例如：模特小A / 5.20选图</p>
             <input type="text" id="userName" placeholder="您的姓名或身份">
             <button class="submit-btn" style="width: 100%;" onclick="finalSubmit()">确认提交记录</button>
-            <button class="btn-text" style="margin-top: 15px; color: #999; background:none; border:none; cursor:pointer;" onclick="closeModal()">返回修改</button>
+            <button style="margin-top: 15px; color: #999; background:none; border:none; cursor:pointer;" onclick="closeModal()">返回修改</button>
         </div>
     </div>
 
@@ -291,58 +377,148 @@
         let allPhotos = [];
         let selectedKeys = new Set();
         let currentIndex = 0;
+        let currentLoadTicket = 0; // 用于处理网络竞态条件的票据
 
         const urlParams = new URLSearchParams(window.location.search);
         const albumId = urlParams.get('album');
 
         async function load() {
-            if (!albumId) return alert("缺失相册ID");
+            if (!albumId) {
+                document.getElementById('gallery').innerHTML = "<div style='text-align:center; margin-top:50px;'>参数错误，请通过正确链接访问。</div>";
+                return;
+            }
+
             const res = await fetch(`/api/photos/list?album=${albumId}`);
+            if (!res.ok) {
+                document.getElementById('gallery').innerHTML = "<div style='text-align:center; margin-top:50px;'>相册已过期或不存在。</div>";
+                return;
+            }
 
-            // 💡 核心修复：适配后端新的数据结构
             const data = await res.json();
-            allPhotos = data.photos; // 将对象中的 photos 数组提取出来
-
             const gallery = document.getElementById('gallery');
+
+            // 💡 核心隐私保护与优雅降级逻辑
+            if (data.canSelect === false) {
+                document.getElementById('selectionBar').style.display = 'none';
+                gallery.style.display = 'block'; // 解除网格布局
+                gallery.innerHTML = `
+                        <div style="max-width: 450px; margin: 80px auto; text-align: center; background: rgba(255, 255, 255, 0.4); padding: 50px 30px; border-radius: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.03); backdrop-filter: blur(10px);">
+                            <div style="font-size: 32px; margin-bottom: 20px;">☕</div>
+                            <h2 style="font-size: 20px; color: #5c4b4b; font-weight: 500; letter-spacing: 2px; margin-bottom: 10px;">选片已结束</h2>
+                            <p style="font-size: 14px; color: #776a6a; margin-bottom: 30px; line-height: 1.8;">摄影师正在为您精心修饰中<br>请耐心等待成品交付</p>
+                            <button onclick="window.location.href='/'" style="background: #5c4b4b; color: white; border: none; padding: 10px 24px; border-radius: 20px; cursor: pointer; font-size: 14px; transition: 0.3s; letter-spacing: 1px;">返回主页</button>
+                        </div>
+                    `;
+                return; // 直接中止，绝不渲染后续照片
+            }
+
+            // 💡 正常照片渲染
+            allPhotos = data.photos;
+
+            if (allPhotos.length === 0) {
+                gallery.innerHTML = "<div style='text-align:center; margin-top:50px;'>相册中暂时没有照片。</div>";
+                return;
+            }
+
             allPhotos.forEach((p, index) => {
                 const card = document.createElement('div');
                 card.className = 'photo-card';
                 card.id = `card-${index}`;
                 card.innerHTML = `
-                    <img src="${p.thumbUrl}" loading="lazy">
-                    <div class="select-badge">✓</div>
-                `;
+                        <img src="${p.thumbUrl}" loading="lazy">
+                        <div class="watermark-layer"></div>
+                        <div class="select-badge">✓</div>
+                    `;
                 card.onclick = () => openLightbox(index);
                 gallery.appendChild(card);
             });
         }
 
-        // 刷新灯箱内的 UI 状态（图片 & 爱心按钮）
+        // --- 重置与 UI 更新 ---
+        function resetSelection() {
+            if (selectedKeys.size === 0) return;
+            if (!confirm("确定要取消勾选所有已选的照片吗？")) return;
+            selectedKeys.clear();
+            document.querySelectorAll('.photo-card').forEach(card => card.classList.remove('is-selected'));
+            updateLightboxView();
+            updateUI();
+        }
+
         function updateLightboxView() {
             const photo = allPhotos[currentIndex];
-            document.getElementById('lightboxImg').src = photo.displayUrl;
-
             const heart = document.getElementById('heartBtn');
             if (selectedKeys.has(photo.key)) {
-                heart.classList.add('active');
-                heart.innerHTML = '✨ 已选入清单';
+                heart.classList.add('active'); heart.innerHTML = '✨ 已选入清单';
             } else {
-                heart.classList.remove('active');
-                heart.innerHTML = '❤️ 选入这张';
+                heart.classList.remove('active'); heart.innerHTML = '❤️ 选入这张';
             }
         }
 
+        function updateUI() {
+            const count = selectedKeys.size;
+            document.getElementById('count-text').innerText = count;
+            document.getElementById('submitBtn').disabled = count === 0;
+            document.getElementById('resetBtn').style.display = count > 0 ? 'inline-block' : 'none';
+        }
+
+        // --- 灯箱浏览与丝滑加载 ---
         function openLightbox(index) {
             currentIndex = index;
+            currentLoadTicket++;
+
+            const lightboxImg = document.getElementById('lightboxImg');
+            lightboxImg.style.opacity = '1';
+            document.getElementById('loadingSpinner').style.display = 'none';
+            lightboxImg.src = allPhotos[currentIndex].displayUrl;
+
             updateLightboxView();
             document.getElementById('lightbox').style.display = 'flex';
             document.body.style.overflow = 'hidden';
+
+            preloadAdjacent();
         }
 
-        // 💡 左右切换逻辑
         function changePhoto(step) {
-            currentIndex = (currentIndex + step + allPhotos.length) % allPhotos.length;
-            updateLightboxView();
+            let nextIndex = currentIndex + step;
+
+            // 💡 边界拦截
+            if (nextIndex >= allPhotos.length) {
+                alert("✨ 您已看完所有照片，可以点击底部提交清单啦");
+                return;
+            }
+            if (nextIndex < 0) {
+                alert("这是第一张照片啦");
+                return;
+            }
+
+            currentIndex = nextIndex;
+            const myTicket = ++currentLoadTicket;
+
+            const lightboxImg = document.getElementById('lightboxImg');
+            const spinner = document.getElementById('loadingSpinner');
+
+            // 变暗，显示 Loading
+            lightboxImg.style.opacity = '0.3';
+            spinner.style.display = 'block';
+
+            const targetUrl = allPhotos[currentIndex].displayUrl;
+
+            // 后台静默加载图片
+            const tempImg = new Image();
+            tempImg.onload = function () {
+                if (myTicket !== currentLoadTicket) return; // 防止狂点导致的乱序
+                lightboxImg.src = targetUrl;
+                lightboxImg.style.opacity = '1';
+                spinner.style.display = 'none';
+                updateLightboxView();
+                preloadAdjacent();
+            };
+            tempImg.src = targetUrl;
+        }
+
+        function preloadAdjacent() {
+            if (currentIndex + 1 < allPhotos.length) new Image().src = allPhotos[currentIndex + 1].displayUrl;
+            if (currentIndex - 1 >= 0) new Image().src = allPhotos[currentIndex - 1].displayUrl;
         }
 
         function toggleSelect(e) {
@@ -353,29 +529,23 @@
 
             if (selectedKeys.has(photo.key)) {
                 selectedKeys.delete(photo.key);
-                heart.classList.remove('active');
-                heart.innerHTML = '❤️ 选入这张';
+                heart.classList.remove('active'); heart.innerHTML = '❤️ 选入这张';
                 card.classList.remove('is-selected');
             } else {
                 selectedKeys.add(photo.key);
-                heart.classList.add('active');
-                heart.innerHTML = '✨ 已选入清单';
+                heart.classList.add('active'); heart.innerHTML = '✨ 已选入清单';
                 card.classList.add('is-selected');
             }
             updateUI();
         }
 
-        function updateUI() {
-            document.getElementById('count-text').innerText = selectedKeys.size;
-            document.getElementById('submitBtn').disabled = selectedKeys.size === 0;
-        }
-
         function closeLightbox() {
             document.getElementById('lightbox').style.display = 'none';
             document.body.style.overflow = 'auto';
+            currentLoadTicket++; // 废弃正在加载的请求
         }
 
-        // 💡 键盘控制接入
+        // --- 键盘快捷键支持 ---
         document.addEventListener('keydown', (e) => {
             if (document.getElementById('lightbox').style.display === 'flex') {
                 if (e.key === 'ArrowLeft') changePhoto(-1);
@@ -384,53 +554,30 @@
             }
         });
 
-        // 提交逻辑
+        // --- 提交操作 ---
         function openSubmitModal() { document.getElementById('submitModal').style.display = 'flex'; }
         function closeModal() { document.getElementById('submitModal').style.display = 'none'; }
 
         async function finalSubmit() {
             const userName = document.getElementById('userName').value.trim();
-            if (!userName) return alert("请输入您的称呼，方便摄影师辨认");
-
-            // 锁定按钮，防止客户连续点击发多条记录
+            if (!userName) return alert("请输入您的称呼");
             const submitBtn = document.querySelector('#submitModal .submit-btn');
-            submitBtn.innerHTML = '⏳ 正在提交...';
             submitBtn.disabled = true;
-
             const payload = {
                 albumId: albumId,
-                phoneNumber: userName, // 我们巧妙地复用这个字段来存身份/称呼
+                phoneNumber: userName,
                 selectedPhotos: Array.from(selectedKeys).join(','),
                 retentionDays: 7
             };
-
             try {
-                // 💡 正式向我们刚写的后端接口发送请求
-                const res = await fetch('/api/photos/submit-selection', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-
-                if (res.ok) {
-                    alert(`✅ 提交成功！\n${userName}，您的选片清单已发送给摄影师。`);
-                    closeModal();
-                } else {
-                    throw new Error("服务器异常");
-                }
-            } catch (err) {
-                alert("网络似乎有点小问题，提交失败，请重试");
-            } finally {
-                // 恢复按钮状态
-                submitBtn.innerHTML = '确认提交记录';
-                submitBtn.disabled = false;
-            }
+                const res = await fetch('/api/photos/submit-selection', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                if (res.ok) { alert(`✅ 提交成功！\n\n摄影师已收到您的选片清单，即将开始为您精修。`); closeModal(); }
+                else { alert("提交失败，选片通道可能已关闭"); }
+            } catch (err) { alert("网络提交失败"); }
+            finally { submitBtn.disabled = false; }
         }
 
         load();
     </script>
-    <footer style="text-align: center; padding: 20px; color: #8c7e7e; font-size: 12px; margin-top: 40px; border-top: 1px solid rgba(255,255,255,0.2);">
-        <p>棠屿·朝夕 © 2026 | <a href="https://beian.miit.gov.cn/" target="_blank" style="color: inherit; text-decoration: none;">沪ICP备2026015126号-1</a></p>
-    </footer>
 </body>
 </html>

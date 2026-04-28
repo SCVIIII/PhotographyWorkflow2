@@ -16,6 +16,7 @@ namespace PhotographyWorkflow.Api.Models
         // 业务状态 (关键列)
         public bool IsPaid { get; set; } = false;
         public bool CanDownload { get; set; } = false; // 💡 新增：客户是否可以下载原图
+        public bool CanSelect { get; set; } = true; // 💡 新增：是否允许客户选片 (默认开启)
 
         // 1: 在线 (Online), 2: 已擦除 (Privacy Wiped)
         public int Status { get; set; } = 1;

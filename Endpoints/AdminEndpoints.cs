@@ -114,7 +114,8 @@ namespace PhotographyWorkflow.Api.Endpoints
             });
 
             // 6. 到期隐私擦除 (只删照片，保留数据记录)
-            group.MapPost("/archive/{id}", async (string id, IOptions<OssOptions> options, OssClient ossClient, AppDbContext db) => {
+            // 💡 修复1：对齐前端接口路径
+            group.MapPost("/albums/{id}/wipe", async (string id, IOptions<OssOptions> options, OssClient ossClient, AppDbContext db) => {
                 var album = await db.Albums.FindAsync(id);
                 if (album == null) return Results.NotFound();
 
@@ -123,10 +124,10 @@ namespace PhotographyWorkflow.Api.Endpoints
                 {
                     var listRequest = new ListObjectsRequest(config.BucketName) { Prefix = $"{id}/" };
                     var list = ossClient.ListObjects(listRequest);
-                    foreach (var obj in list.ObjectSummaries)
-                    {
-                        ossClient.DeleteObject(config.BucketName, obj.Key);
-                    }
+                    var keys = list.ObjectSummaries.Select(o => o.Key).ToList();
+
+                    // 使用批量删除，效率更高
+                    if (keys.Any()) ossClient.DeleteObjects(new DeleteObjectsRequest(config.BucketName, keys));
                 }
                 catch (Exception ex)
                 {
@@ -140,32 +141,42 @@ namespace PhotographyWorkflow.Api.Endpoints
             });
 
             // 7. 彻底物理删除 (连根拔起)
-            group.MapDelete("/delete/{id}", async (string id, IOptions<OssOptions> options, OssClient ossClient, AppDbContext db) => {
+            // 💡 修复2：对齐前端接口路径
+            group.MapDelete("/albums/{id}", async (string id, IOptions<OssOptions> options, OssClient ossClient, AppDbContext db) => {
                 var album = await db.Albums.FindAsync(id);
                 if (album == null) return Results.NotFound();
 
-                var config = options.Value;
-                try
+                // 💡 修复3：必须先删除该相册关联的【选片记录】，否则数据库会报错拦截
+                var relatedSelections = await db.Selections.Where(s => s.AlbumId == id).ToListAsync();
+                if (relatedSelections.Any())
                 {
-                    var listRequest = new ListObjectsRequest(config.BucketName) { Prefix = $"{id}/" };
-                    var list = ossClient.ListObjects(listRequest);
-                    foreach (var obj in list.ObjectSummaries)
-                    {
-                        ossClient.DeleteObject(config.BucketName, obj.Key);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"[清理 OSS 失败]: {ex.Message}");
+                    db.Selections.RemoveRange(relatedSelections);
                 }
 
+                // 💡 修复4：解除约束后，再安全删除相册本体
                 db.Albums.Remove(album);
                 await db.SaveChangesAsync();
 
+                // 💡 修复5：将耗时的 OSS 清理放入后台静默执行，让网页瞬间收到成功反馈
+                _ = Task.Run(() =>
+                {
+                    try
+                    {
+                        var config = options.Value;
+                        var listRequest = new ListObjectsRequest(config.BucketName) { Prefix = $"{id}/" };
+                        var list = ossClient.ListObjects(listRequest);
+                        var keys = list.ObjectSummaries.Select(o => o.Key).ToList();
+
+                        if (keys.Any()) ossClient.DeleteObjects(new DeleteObjectsRequest(config.BucketName, keys));
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[清理 OSS 失败]: {ex.Message}");
+                    }
+                });
+
                 return Results.Ok();
             });
-
-
 
             // 8. 获取某个相册的所有选片记录
             group.MapGet("/selections/{albumId}", async (string albumId, AppDbContext db) =>
@@ -186,8 +197,32 @@ namespace PhotographyWorkflow.Api.Endpoints
 
                 if (req.Field == "IsPaid") album.IsPaid = req.Value;
                 if (req.Field == "CanDownload") album.CanDownload = req.Value;
+                if (req.Field == "CanSelect") album.CanSelect = req.Value; // 💡 映射允许选片开关
 
                 await db.SaveChangesAsync();
+                return Results.Ok();
+            });
+
+            // 10. 清空相册 (保留数据库记录，仅销毁 OSS 照片)
+            group.MapPost("/empty/{id}", async (string id, IOptions<OssOptions> options, OssClient ossClient, AppDbContext db) => {
+                var album = await db.Albums.FindAsync(id);
+                if (album == null) return Results.NotFound();
+
+                var config = options.Value;
+                try
+                {
+                    var listRequest = new ListObjectsRequest(config.BucketName) { Prefix = $"{id}/" };
+                    var list = ossClient.ListObjects(listRequest);
+                    var keys = list.ObjectSummaries.Select(o => o.Key).ToList();
+
+                    if (keys.Any()) ossClient.DeleteObjects(new DeleteObjectsRequest(config.BucketName, keys));
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[清理 OSS 失败]: {ex.Message}");
+                }
+
+                // 💡 注意：这里不修改 album.Status，保持它依然在线，方便摄影师重新传图
                 return Results.Ok();
             });
 

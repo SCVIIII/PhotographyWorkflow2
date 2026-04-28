@@ -367,3 +367,6 @@ appsettings.json
 secrets.json
 config.json
 *.json
+# .gitignore
+appsettings.*.json
+*.secret

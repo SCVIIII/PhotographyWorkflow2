@@ -279,8 +279,8 @@
 
         <div id="section-new">
             <div class="form-group">
-                <label>专属相册名称 (如: 杭州西湖外景 / 模特小A)</label>
-                <input type="text" id="new-name" placeholder="请输入直观的名称">
+                <label>专属相册名称 (选填，留空将自动按日期命名)</label>
+                <input type="text" id="new-name" placeholder="如: 杭州西湖外景 / 模特小A (不填则自动生成)">
             </div>
             <div class="form-group">
                 <label>交付留存天数 (默认 30 天)</label>
@@ -296,10 +296,9 @@
 
         <div id="section-append" style="display: none;">
             <div class="form-group">
-                <label>目标相册 ID (请从大盘获取)</label>
+                <label>目标相册 ID 或 链接 (支持自动识别)</label>
                 <div style="display: flex; gap: 10px;">
-                    <input type="text" id="append-albumId" placeholder="例如: 7b2c9a1...">
-                    <button class="action-tag" onclick="verifyAlbum()">校验</button>
+                    <input type="text" id="append-albumId" placeholder="可直接粘贴画廊链接或8位短码..." oninput="autoVerify()">
                 </div>
                 <div id="verify-result" style="font-size: 12px; margin-top: 8px;"></div>
             </div>
@@ -392,7 +391,6 @@
             const days = document.getElementById('new-days').value;
             const files = document.getElementById('new-files').files;
 
-            if (!name) return alert("相册名称不能为空");
             const btn = document.getElementById('btn-new');
             btn.disabled = true; btn.innerText = "正在创建相册...";
 
@@ -407,7 +405,7 @@
                     btn.innerText = `相册创建成功，开始上传 ${files.length} 张照片...`;
                     await uploadFiles(album.id, files, btn);
                 } else {
-                    alert(`✅ 空相册创建成功！相册ID: ${album.id}`);
+                    alert(`✅ 空相册创建成功！\n相册名称: ${album.name}\n相册ID: ${album.id}`);
                 }
                 document.getElementById('new-name').value = '';
                 document.getElementById('new-files').value = '';
@@ -418,13 +416,25 @@
 
         // --- 业务：补充验证与上传 ---
         let verifiedAlbumId = "";
+        let verifyTimeout;
+
+        function autoVerify() {
+            clearTimeout(verifyTimeout);
+            verifyTimeout = setTimeout(verifyAlbum, 500);
+        }
+
         async function verifyAlbum() {
             const id = document.getElementById('append-albumId').value.trim();
             const hint = document.getElementById('verify-result');
-            if (!id) return hint.innerHTML = '<span style="color:#d9534f">请输入ID</span>';
+
+            if (!id) {
+                hint.innerHTML = '';
+                document.getElementById('btn-append').disabled = true;
+                return;
+            }
 
             try {
-                const res = await fetch(`/api/admin/albums/${id}`);
+                const res = await fetch(`/api/admin/lookup?identifier=${encodeURIComponent(id)}`);
                 if (res.ok) {
                     const data = await res.json();
                     verifiedAlbumId = data.id;
@@ -450,6 +460,9 @@
             document.getElementById('append-files').value = '';
             document.getElementById('append-file-hint').innerText = '';
             btn.disabled = false; btn.innerText = "校验成功后可上传";
+            document.getElementById('append-albumId').value = '';
+            document.getElementById('verify-result').innerHTML = '';
+            verifiedAlbumId = '';
         }
 
         async function uploadFiles(albumId, files, btnElement) {
@@ -507,15 +520,20 @@
                                 </div>
 
                                 <div class="ac-switches">
-                                    <label><input type="checkbox" ${a.isPaid ? 'checked' : ''} onchange="updateAlbumStatus('${a.id}', 'IsPaid', this.checked)"> 💰 已结清</label>
+                                    <label><input type="checkbox" ${a.canSelect ? 'checked' : ''} onchange="updateAlbumStatus('${a.id}', 'CanSelect', this.checked)"> 📸 允许选片</label>
                                     <label><input type="checkbox" ${a.canDownload ? 'checked' : ''} onchange="updateAlbumStatus('${a.id}', 'CanDownload', this.checked)"> ⬇️ 允许下载</label>
+                                    <label><input type="checkbox" ${a.isPaid ? 'checked' : ''} onchange="updateAlbumStatus('${a.id}', 'IsPaid', this.checked)"> 💰 已结清</label>
                                 </div>
 
                                 <div class="ac-actions">
                                     <button class="ac-btn" onclick="copyTextDirect('${galleryLink}', this)">🔗 复制画廊链接</button>
                                     <button class="ac-btn" onclick="copyTextDirect('${selectLink}', this)">🔗 复制选片链接</button>
+                                    <button class="ac-btn" onclick="copyTextDirect('${a.id}', this)">🆔 复制相册 ID</button>
                                     <button class="ac-btn primary" onclick="viewSelections('${a.id}')">📸 查看选片清单</button>
-                                    ${!isWiped ? `<button class="ac-btn" onclick="wipePrivacy('${a.id}','${a.name}')">🧹 隐私擦除</button>` : '<div></div>'}
+                                    
+                                    ${!isWiped ? `<button class="ac-btn" onclick="emptyAlbumPhotos('${a.id}','${a.name}')">🧹 清空重传</button>` : '<div></div>'}
+                                    ${!isWiped ? `<button class="ac-btn" onclick="wipePrivacy('${a.id}','${a.name}')">🗂️ 隐私擦除</button>` : '<div></div>'}
+                                    
                                     <button class="ac-btn danger" onclick="hardDelete('${a.id}')" style="grid-column: span 2;">⚠️ 彻底删除此相册</button>
                                 </div>
                             </div>
@@ -523,6 +541,19 @@
                     container.innerHTML += cardHtml;
                 });
             } catch (e) { container.innerHTML = '<div style="text-align:center; padding: 20px; color:#d9534f;">连接失败</div>'; }
+        }
+
+        // 💡 对应的清空请求函数
+        async function emptyAlbumPhotos(id, name) {
+            if (!confirm(`🧹 即将清空【${name}】的云端照片！\n\n注意：这不会删除相册ID和选片记录，方便您通过"补充照片"功能重新上传新照片。`)) return;
+            try {
+                await fetch(`/api/admin/empty/${id}`, { method: 'POST' });
+                alert("云端照片已清空！请前往“补充照片”上传新图。");
+                // 可选：直接跳转到补充照片 Tab 并填入 ID
+                document.getElementById('append-albumId').value = id;
+                autoVerify();
+                switchTab('append', document.querySelectorAll('.tab-btn')[1]);
+            } catch (e) { alert("操作失败"); }
         }
 
         async function updateAlbumStatus(id, field, value) {
@@ -552,7 +583,6 @@
                 let html = '';
                 data.forEach(item => {
                     const count = item.selectedPhotos ? item.selectedPhotos.split(',').length : 0;
-                    // 💡 智能去前缀：把 20260428123013_DSC_1204.JPG 还原为 DSC_1204.JPG，完美兼容 LR
                     const cleanNames = item.selectedPhotos.split(',')
                         .map(path => path.split('/').pop().replace(/^\d{14}_/, ''))
                         .join(',');
@@ -585,13 +615,20 @@
 
         async function hardDelete(id) {
             if (!confirm("⚠️ 极其危险！\n\n确定要从数据库中抹除这个相册的所有记录吗？这不可恢复！")) return;
+
             try {
-                await fetch(`/api/admin/albums/${id}`, { method: 'DELETE' });
-                alert("相册记录已抹除"); loadAlbums();
-            } catch (e) { alert("删除失败"); }
+                const res = await fetch(`/api/admin/albums/${id}`, { method: 'DELETE' });
+                if (res.ok) {
+                    alert("✅ 相册及所有关联记录已彻底抹除");
+                    loadAlbums();
+                } else {
+                    throw new Error(`服务器拒绝了删除请求 (代码: ${res.status})`);
+                }
+            } catch (e) {
+                alert(`❌ 删除失败：${e.message}\n可能是由于存在未清理的关联数据。`);
+            }
         }
 
-        // 初始化默认选中的选项卡数据
         switchTab('manage', document.querySelectorAll('.tab-btn')[2]);
     </script>
 </body>

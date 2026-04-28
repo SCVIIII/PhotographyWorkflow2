@@ -1,0 +1,436 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>棠屿·朝夕 | 协作选片</title>
+    <style>
+        /* --- 沿用 index.html 核心审美 --- */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 15px 15px 80px 15px; /* 底部留空给工具栏 */
+            background: linear-gradient(135deg, #eee3e3 0%, #e1cdcd 100%);
+            min-height: 100vh;
+            background-attachment: fixed;
+        }
+
+        .header-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 10px;
+            margin-bottom: 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.4);
+        }
+
+        .slogan-area {
+            text-align: left;
+            color: #5c4b4b;
+        }
+
+        .hero-title {
+            font-size: 24px;
+            font-weight: 500;
+            margin: 0;
+            letter-spacing: 2px;
+        }
+
+        .hero-subtitle {
+            font-size: 14px;
+            margin: 5px 0 0 0;
+            font-family: 'Georgia', serif;
+            font-style: italic;
+            opacity: 0.8;
+        }
+
+        /* --- 画廊网格与选中状态 --- */
+        .gallery {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+            gap: 15px;
+        }
+
+        .photo-card {
+            position: relative;
+            border-radius: 8px;
+            overflow: hidden;
+            background: rgba(255, 255, 255, 0.3);
+            cursor: pointer;
+            transition: transform 0.3s ease;
+        }
+
+            .photo-card img {
+                width: 100%;
+                height: 200px;
+                object-fit: cover;
+                display: block;
+            }
+
+        /* 选中标记遮罩 */
+        .select-badge {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(92, 75, 75, 0.4);
+            display: none; /* 默认隐藏 */
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-size: 30px;
+            backdrop-filter: blur(2px);
+        }
+
+        .photo-card.is-selected .select-badge {
+            display: flex;
+        }
+
+        /* --- 底部选片工具栏 --- */
+        .selection-bar {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 90%;
+            max-width: 500px;
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(20px);
+            padding: 12px 25px;
+            border-radius: 40px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .selection-info {
+            color: #5c4b4b;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .submit-btn {
+            background: #5c4b4b;
+            color: white;
+            border: none;
+            padding: 8px 20px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: 0.3s;
+        }
+
+            .submit-btn:disabled {
+                background: #ccc;
+                cursor: not-allowed;
+            }
+
+        /* --- 灯箱内选片控制 --- */
+        .lightbox {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(15, 15, 15, 0.98);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+            backdrop-filter: blur(15px);
+        }
+
+        .lightbox-img {
+            max-width: 90vw;
+            max-height: 80vh;
+            object-fit: contain;
+        }
+
+        /* 左右切换按钮 */
+        .nav-btn {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 36px;
+            cursor: pointer;
+            background: none;
+            border: none;
+            padding: 20px;
+            transition: 0.3s;
+            z-index: 2001;
+        }
+
+        .prev-btn {
+            left: 10px;
+        }
+
+        .next-btn {
+            right: 10px;
+        }
+
+        .nav-btn:hover {
+            color: rgba(255, 255, 255, 1);
+            transform: translateY(-50%) scale(1.1);
+        }
+
+        .heart-btn {
+            position: absolute;
+            bottom: 40px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            padding: 15px 30px;
+            border-radius: 30px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: 0.3s;
+            z-index: 2001; /* 确保层级高于图片 */
+        }
+
+            .heart-btn.active {
+                background: #fff;
+                color: #5c4b4b;
+            }
+
+        /* 顶部关闭 */
+        .close-btn {
+            position: absolute;
+            top: 20px;
+            right: 30px;
+            color: white;
+            font-size: 40px;
+            cursor: pointer;
+            opacity: 0.6;
+            z-index: 2001;
+        }
+
+        /* --- 身份输入弹窗 --- */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 3000;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 16px;
+            width: 80%;
+            max-width: 350px;
+            text-align: center;
+        }
+
+            .modal-content h3 {
+                margin-top: 0;
+                color: #5c4b4b;
+            }
+
+            .modal-content input {
+                width: 100%;
+                padding: 12px;
+                margin: 20px 0;
+                border: 1px solid #ddd;
+                border-radius: 8px;
+                box-sizing: border-box;
+                text-align: center;
+            }
+    </style>
+</head>
+<body>
+
+    <div class="header-container">
+        <div class="slogan-area">
+            <h1 class="hero-title">棠屿·选片间</h1>
+            <p class="hero-subtitle">Selection Space.</p>
+        </div>
+    </div>
+
+    <div class="gallery" id="gallery"></div>
+
+    <div class="selection-bar">
+        <div class="selection-info">已选入 <span id="count-text">0</span> 张照片</div>
+        <button class="submit-btn" id="submitBtn" onclick="openSubmitModal()" disabled>提交选片清单</button>
+    </div>
+
+    <div id="lightbox" class="lightbox" onclick="closeLightbox()">
+        <span class="close-btn" onclick="closeLightbox(); event.stopPropagation();">&times;</span>
+
+        <button class="nav-btn prev-btn" onclick="event.stopPropagation(); changePhoto(-1)" title="上一张 (左方向键)">&#10094;</button>
+
+        <img id="lightboxImg" class="lightbox-img" src="" onclick="event.stopPropagation();">
+
+        <button class="nav-btn next-btn" onclick="event.stopPropagation(); changePhoto(1)" title="下一张 (右方向键)">&#10095;</button>
+
+        <button id="heartBtn" class="heart-btn" onclick="toggleSelect(event)">
+            ❤️ 选入这张
+        </button>
+    </div>
+
+    <div id="submitModal" class="modal">
+        <div class="modal-content">
+            <h3>请留下您的称呼</h3>
+            <p style="font-size: 13px; color: #888;">例如：模特小A / 伴娘 / 5.20选图</p>
+            <input type="text" id="userName" placeholder="您的姓名或身份">
+            <button class="submit-btn" style="width: 100%;" onclick="finalSubmit()">确认提交记录</button>
+            <button class="btn-text" style="margin-top: 15px; color: #999; background:none; border:none; cursor:pointer;" onclick="closeModal()">返回修改</button>
+        </div>
+    </div>
+
+    <script>
+        let allPhotos = [];
+        let selectedKeys = new Set();
+        let currentIndex = 0;
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const albumId = urlParams.get('album');
+
+        async function load() {
+            if (!albumId) return alert("缺失相册ID");
+            const res = await fetch(`/api/photos/list?album=${albumId}`);
+
+            // 💡 核心修复：适配后端新的数据结构
+            const data = await res.json();
+            allPhotos = data.photos; // 将对象中的 photos 数组提取出来
+
+            const gallery = document.getElementById('gallery');
+            allPhotos.forEach((p, index) => {
+                const card = document.createElement('div');
+                card.className = 'photo-card';
+                card.id = `card-${index}`;
+                card.innerHTML = `
+                    <img src="${p.thumbUrl}" loading="lazy">
+                    <div class="select-badge">✓</div>
+                `;
+                card.onclick = () => openLightbox(index);
+                gallery.appendChild(card);
+            });
+        }
+
+        // 刷新灯箱内的 UI 状态（图片 & 爱心按钮）
+        function updateLightboxView() {
+            const photo = allPhotos[currentIndex];
+            document.getElementById('lightboxImg').src = photo.displayUrl;
+
+            const heart = document.getElementById('heartBtn');
+            if (selectedKeys.has(photo.key)) {
+                heart.classList.add('active');
+                heart.innerHTML = '✨ 已选入清单';
+            } else {
+                heart.classList.remove('active');
+                heart.innerHTML = '❤️ 选入这张';
+            }
+        }
+
+        function openLightbox(index) {
+            currentIndex = index;
+            updateLightboxView();
+            document.getElementById('lightbox').style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+        }
+
+        // 💡 左右切换逻辑
+        function changePhoto(step) {
+            currentIndex = (currentIndex + step + allPhotos.length) % allPhotos.length;
+            updateLightboxView();
+        }
+
+        function toggleSelect(e) {
+            e.stopPropagation();
+            const photo = allPhotos[currentIndex];
+            const heart = document.getElementById('heartBtn');
+            const card = document.getElementById(`card-${currentIndex}`);
+
+            if (selectedKeys.has(photo.key)) {
+                selectedKeys.delete(photo.key);
+                heart.classList.remove('active');
+                heart.innerHTML = '❤️ 选入这张';
+                card.classList.remove('is-selected');
+            } else {
+                selectedKeys.add(photo.key);
+                heart.classList.add('active');
+                heart.innerHTML = '✨ 已选入清单';
+                card.classList.add('is-selected');
+            }
+            updateUI();
+        }
+
+        function updateUI() {
+            document.getElementById('count-text').innerText = selectedKeys.size;
+            document.getElementById('submitBtn').disabled = selectedKeys.size === 0;
+        }
+
+        function closeLightbox() {
+            document.getElementById('lightbox').style.display = 'none';
+            document.body.style.overflow = 'auto';
+        }
+
+        // 💡 键盘控制接入
+        document.addEventListener('keydown', (e) => {
+            if (document.getElementById('lightbox').style.display === 'flex') {
+                if (e.key === 'ArrowLeft') changePhoto(-1);
+                if (e.key === 'ArrowRight') changePhoto(1);
+                if (e.key === 'Escape') closeLightbox();
+            }
+        });
+
+        // 提交逻辑
+        function openSubmitModal() { document.getElementById('submitModal').style.display = 'flex'; }
+        function closeModal() { document.getElementById('submitModal').style.display = 'none'; }
+
+        async function finalSubmit() {
+            const userName = document.getElementById('userName').value.trim();
+            if (!userName) return alert("请输入您的称呼，方便摄影师辨认");
+
+            // 锁定按钮，防止客户连续点击发多条记录
+            const submitBtn = document.querySelector('#submitModal .submit-btn');
+            submitBtn.innerHTML = '⏳ 正在提交...';
+            submitBtn.disabled = true;
+
+            const payload = {
+                albumId: albumId,
+                phoneNumber: userName, // 我们巧妙地复用这个字段来存身份/称呼
+                selectedPhotos: Array.from(selectedKeys).join(','),
+                retentionDays: 7
+            };
+
+            try {
+                // 💡 正式向我们刚写的后端接口发送请求
+                const res = await fetch('/api/photos/submit-selection', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (res.ok) {
+                    alert(`✅ 提交成功！\n${userName}，您的选片清单已发送给摄影师。`);
+                    closeModal();
+                } else {
+                    throw new Error("服务器异常");
+                }
+            } catch (err) {
+                alert("网络似乎有点小问题，提交失败，请重试");
+            } finally {
+                // 恢复按钮状态
+                submitBtn.innerHTML = '确认提交记录';
+                submitBtn.disabled = false;
+            }
+        }
+
+        load();
+    </script>
+    <footer style="text-align: center; padding: 20px; color: #8c7e7e; font-size: 12px; margin-top: 40px; border-top: 1px solid rgba(255,255,255,0.2);">
+        <p>棠屿·朝夕 © 2026 | <a href="https://beian.miit.gov.cn/" target="_blank" style="color: inherit; text-decoration: none;">沪ICP备2026015126号-1</a></p>
+    </footer>
+</body>
+</html>

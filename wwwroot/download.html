@@ -1,0 +1,172 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>客户照片下载中心</title>
+    <style>
+        /* 沿用 index.html 的样式，保持统一视觉 */
+        body {
+            font-family: sans-serif;
+            background: #fdfdfd;
+            padding: 15px;
+            margin: 0;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+
+        .gallery {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 10px;
+        }
+
+        .photo-card {
+            position: relative;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+            .photo-card img {
+                width: 100%;
+                height: 150px;
+                object-fit: cover;
+                display: block;
+            }
+
+            .photo-card input[type="checkbox"] {
+                display: none;
+            }
+
+            .photo-card label {
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                cursor: pointer;
+                border: 3px solid transparent;
+            }
+
+            .photo-card input[type="checkbox"]:checked + label {
+                border-color: #28a745;
+                background: rgba(40, 167, 69, 0.2);
+            }
+
+        .action-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: white;
+            padding: 15px;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .download-btn {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h2>✨ 客片下载专区</h2>
+        <p>选择您喜欢的精修照片，一键批量保存到手机/电脑</p>
+        <div style="margin: 10px;">
+            <button onclick="toggleAll(true)">全选</button>
+            <button onclick="toggleAll(false)">取消</button>
+        </div>
+    </div>
+
+    <div class="gallery" id="gallery"></div>
+
+    <div class="action-bar">
+        <span id="counter">未选择照片</span>
+        <button class="download-btn" id="startDownload">直接下载选中照片</button>
+    </div>
+
+    <script>
+    const gallery = document.getElementById('gallery');
+    const counter = document.getElementById('counter');
+    const startDownload = document.getElementById('startDownload');
+    let selectedSet = new Set();
+
+    // 1. 加载清单 (复用之前的 API)
+    async function load() {
+        const res = await fetch('/api/photos/list');
+        const files = await res.json();
+        files.forEach(name => {
+            const card = document.createElement('div');
+            card.className = 'photo-card';
+            card.innerHTML = `
+                <img src="/photos/${name}" alt="p">
+                <input type="checkbox" id="${name}" value="${name}">
+                <label for="${name}"></label>
+            `;
+            gallery.appendChild(card);
+
+            card.querySelector('input').onchange = (e) => {
+                if(e.target.checked) selectedSet.add(name);
+                else selectedSet.delete(name);
+                counter.innerText = `已选 ${selectedSet.size} 张`;
+            };
+        });
+    }
+
+    // 2. 总控开关
+    function toggleAll(sel) {
+        document.querySelectorAll('input').forEach(i => {
+            i.checked = sel;
+            if(sel) selectedSet.add(i.value);
+            else selectedSet.clear();
+        });
+        counter.innerText = sel ? `已选 ${selectedSet.size} 张` : `未选择照片`;
+    }
+
+    // ⚡ 核心逻辑：执行批量下载 (批量配电)
+    startDownload.onclick = async () => {
+        if(selectedSet.size === 0) return alert("请先选片");
+
+        // 提醒：批量下载在浏览器中可能会触发“允许下载多个文件”的提示，请点击允许
+        const fileList = Array.from(selectedSet);
+
+        for (let i = 0; i < fileList.length; i++) {
+            const fileName = fileList[i];
+            const url = `/photos/${fileName}`;
+
+            // 创建一个“影子链接”并模拟点击，实现强制触发浏览器下载
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = fileName; // 提示浏览器下载而不是打开
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            // 为了防止瞬间触发上百个下载导致浏览器崩溃，我们加一个极小的延时(100ms)
+            // 就像电气里的延时继电器，防止电流瞬间峰值过高
+            await new Promise(resolve => setTimeout(resolve, 100));
+        }
+
+        alert("下载指令已全部发送！请查看浏览器的下载管理器。");
+    };
+
+    load();
+    </script>
+</body>
+</html>

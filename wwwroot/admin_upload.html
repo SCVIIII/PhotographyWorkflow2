@@ -1,0 +1,109 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>摄影师控制台 (本地局域网版)</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            padding: 20px;
+            background: #f0f2f5;
+        }
+
+        .box {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            max-width: 500px;
+            margin: 0 auto;
+        }
+
+        button, label {
+            display: block;
+            width: 100%;
+            padding: 15px;
+            background: #0078D4;
+            color: white;
+            text-align: center;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 10px;
+            font-size: 16px;
+            border: none;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        #log {
+            margin-top: 15px;
+            font-size: 14px;
+            color: #333;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="box">
+        <h2>📸 本地极速传图台</h2>
+        <p>直接将 iPad 照片无线传输至工作站</p>
+
+        <label for="fileInput">1. 选择精修照片 (JPG)</label>
+        <input type="file" id="fileInput" multiple accept="image/jpeg, image/jpg">
+
+        <button id="uploadBtn">2. 开始无线上传</button>
+
+        <div id="log">等待操作...</div>
+    </div>
+
+    <script>
+    const fileInput = document.getElementById('fileInput');
+    const uploadBtn = document.getElementById('uploadBtn');
+    const logArea = document.getElementById('log');
+
+    let selectedFiles = [];
+
+    fileInput.addEventListener('change', (e) => {
+        selectedFiles = e.target.files;
+        logArea.innerHTML = `已选中 ${selectedFiles.length} 张照片。`;
+    });
+
+    uploadBtn.addEventListener('click', async () => {
+        if (selectedFiles.length === 0) {
+            alert("请先选择照片！"); return;
+        }
+
+        uploadBtn.disabled = true;
+
+        for (let i = 0; i < selectedFiles.length; i++) {
+            const file = selectedFiles[i];
+            logArea.innerHTML = `正在上传第 ${i + 1}/${selectedFiles.length} 张: ${file.name}`;
+
+            const formData = new FormData();
+            formData.append('photoFile', file);
+
+            try {
+                // 注意这里：因为网页和 API 在同一个本地服务器，直接写相对路径即可
+                const response = await fetch('/api/debug/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) throw new Error("服务器拒绝接收");
+
+            } catch (error) {
+                logArea.innerHTML += `<br><span style="color:red">上传 ${file.name} 失败！</span>`;
+            }
+        }
+
+        logArea.innerHTML = `✅ 全部上传完毕！请在电脑文件夹中查看。`;
+        uploadBtn.disabled = false;
+    });
+    </script>
+
+</body>
+</html>

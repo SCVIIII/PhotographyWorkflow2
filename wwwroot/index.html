@@ -442,7 +442,9 @@
 
         async function loadPhotos() {
             try {
-                const response = await fetch(`/api/photos/list?album=${currentAlbum}`);
+                //const response = await fetch(`/api/photos/list?album=${currentAlbum}`);
+                // 💡 明确告诉后端：我是看图画廊，请放行我的请求，不要受选片开关的误伤
+                const response = await fetch(`/api/photos/list?album=${currentAlbum}&mode=gallery`);
                 if (!response.ok) {
                     document.getElementById('gallery-view').innerHTML = "<div style='text-align:center; margin-top:100px; color:#5c4b4b;'><h2>时光胶囊已封存 🕰️</h2><p>该链接已过有效期或相册不存在</p></div>";
                     return;

@@ -21,16 +21,15 @@ namespace PhotographyWorkflow.Api.Endpoints
             var group = app.MapGroup("/api/photos");
 
             // 1. 获取相册照片列表 (供 index.html 和 select.html 共同调用)
-            group.MapGet("/list", async ([FromQuery] string album, AppDbContext db, IOptions<OssOptions> options, OssClient ossClient) =>
+            // 💡 修复3：新增 mode 参数，让前端亮明身份
+            group.MapGet("/list", async ([FromQuery] string album, [FromQuery] string? mode, AppDbContext db, IOptions<OssOptions> options, OssClient ossClient) =>
             {
-                // 1.1 检查相册是否存在以及状态是否合法
                 var albumRecord = await db.Albums.FindAsync(album);
                 if (albumRecord == null || albumRecord.Status == 2)
                 {
                     return Results.NotFound(new { message = "时光胶囊已封存，该相册不存在或已被彻底擦除" });
                 }
 
-                // 1.2 从 OSS 拉取该相册目录下的物理照片列表
                 var config = options.Value;
                 var allPhotos = new List<string>();
                 try
@@ -41,8 +40,8 @@ namespace PhotographyWorkflow.Api.Endpoints
                     foreach (var obj in listResult.ObjectSummaries)
                     {
                         var key = obj.Key;
-                        // 排除目录本身和 thumbs 文件夹里的缩略图，只抓取原图文件名
-                        if (!key.EndsWith("/") && !key.Contains("/thumbs/"))
+                        // 排除目录本身，只抓取文件名
+                        if (!key.EndsWith("/"))
                         {
                             allPhotos.Add(key.Split('/').Last());
                         }
@@ -54,27 +53,35 @@ namespace PhotographyWorkflow.Api.Endpoints
                     return Results.Problem("服务器连接云端相册失败");
                 }
 
-                // 1.3 💡 物理隔离隐私保护：判断是否允许选片
-                var photoList = albumRecord.CanSelect
+                // 💡 修复2：链接清洗函数 (解决浏览器拦截和内网节点打不开的问题)
+                string GenerateSafeUrl(string key, int hours)
+                {
+                    var rawUrl = ossClient.GeneratePresignedUri(config.BucketName, key, DateTime.Now.AddHours(hours)).ToString();
+                    if (rawUrl.StartsWith("http://")) rawUrl = rawUrl.Replace("http://", "https://");
+                    if (rawUrl.Contains("-internal.aliyuncs")) rawUrl = rawUrl.Replace("-internal.aliyuncs", ".aliyuncs");
+                    return rawUrl;
+                }
+
+                // 💡 修复3：精准物理隔离。只有当来源是选片间(mode=select)且关闭了选片通道时，才隐藏照片。
+                bool hidePhotos = (mode == "select" && !albumRecord.CanSelect);
+
+                var photoList = !hidePhotos
                     ? allPhotos.Select(p => new
                     {
                         key = p,
-                        // 缩略图地址（用于网格墙展示，有效期 2 小时）
-                        thumbUrl = ossClient.GeneratePresignedUri(config.BucketName, $"{albumRecord.Id}/thumbs/{p}", DateTime.Now.AddHours(2)).ToString(),
-                        // 高清大图展示地址（用于灯箱全屏，有效期 2 小时）
-                        displayUrl = ossClient.GeneratePresignedUri(config.BucketName, $"{albumRecord.Id}/{p}", DateTime.Now.AddHours(2)).ToString(),
-                        // 长效下载地址（供画廊客户下载原图使用，有效期 24 小时）
-                        downloadUrl = ossClient.GeneratePresignedUri(config.BucketName, $"{albumRecord.Id}/{p}", DateTime.Now.AddHours(24)).ToString()
+                        // 💡 修复1：移除了 "/thumbs/" 路径，统一使用原图，彻底消灭 404 的 X 号
+                        thumbUrl = GenerateSafeUrl($"{albumRecord.Id}/{p}", 2),
+                        displayUrl = GenerateSafeUrl($"{albumRecord.Id}/{p}", 2),
+                        downloadUrl = GenerateSafeUrl($"{albumRecord.Id}/{p}", 24)
                     }).ToList<object>()
-                    : new List<object>(); // 👈 选片通道关闭时，抛弃列表，物理切断数据外流
+                    : new List<object>();
 
-                // 1.4 下发组装好的数据模型给前端
                 return Results.Ok(new
                 {
                     id = albumRecord.Id,
                     name = albumRecord.Name,
                     canDownload = albumRecord.CanDownload,
-                    canSelect = albumRecord.CanSelect, // 前端依靠此标志进行UI降级
+                    canSelect = albumRecord.CanSelect,
                     photos = photoList
                 });
             });

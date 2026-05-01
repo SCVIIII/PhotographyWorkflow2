@@ -526,10 +526,11 @@
                                 </div>
 
                                 <div class="ac-actions">
+                                <button class="ac-btn" onclick="copyTextDirect('${a.id}', this)">🆔 复制相册 ID</button>
+                                    <button class="ac-btn primary" onclick="viewSelections('${a.id}')">📸 查看选片清单</button>
                                     <button class="ac-btn" onclick="copyTextDirect('${galleryLink}', this)">🔗 复制画廊链接</button>
                                     <button class="ac-btn" onclick="copyTextDirect('${selectLink}', this)">🔗 复制选片链接</button>
-                                    <button class="ac-btn" onclick="copyTextDirect('${a.id}', this)">🆔 复制相册 ID</button>
-                                    <button class="ac-btn primary" onclick="viewSelections('${a.id}')">📸 查看选片清单</button>
+                                    
                                     
                                     ${!isWiped ? `<button class="ac-btn" onclick="emptyAlbumPhotos('${a.id}','${a.name}')">🧹 清空重传</button>` : '<div></div>'}
                                     ${!isWiped ? `<button class="ac-btn" onclick="wipePrivacy('${a.id}','${a.name}')">🗂️ 隐私擦除</button>` : '<div></div>'}

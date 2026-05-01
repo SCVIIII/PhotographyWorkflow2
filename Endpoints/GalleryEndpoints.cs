@@ -22,6 +22,7 @@ namespace PhotographyWorkflow.Api.Endpoints
 
             // 1. 获取相册照片列表 (供 index.html 和 select.html 共同调用)
             // 💡 修复3：新增 mode 参数，让前端亮明身份
+            // 1. 获取相册照片列表 (供 index.html 和 select.html 共同调用)
             group.MapGet("/list", async ([FromQuery] string album, [FromQuery] string? mode, AppDbContext db, IOptions<OssOptions> options, OssClient ossClient) =>
             {
                 var albumRecord = await db.Albums.FindAsync(album);
@@ -40,7 +41,6 @@ namespace PhotographyWorkflow.Api.Endpoints
                     foreach (var obj in listResult.ObjectSummaries)
                     {
                         var key = obj.Key;
-                        // 排除目录本身，只抓取文件名
                         if (!key.EndsWith("/"))
                         {
                             allPhotos.Add(key.Split('/').Last());
@@ -53,26 +53,58 @@ namespace PhotographyWorkflow.Api.Endpoints
                     return Results.Problem("服务器连接云端相册失败");
                 }
 
-                // 💡 修复2：链接清洗函数 (解决浏览器拦截和内网节点打不开的问题)
-                string GenerateSafeUrl(string key, int hours)
+                // 💡 终极修复版：严格遵守语法，且区分业务场景的 URL 生成器
+                // 💡 改进版：新增 watermarkSize 参数，动态控制水印大小
+                string GenerateSafeUrl(string key, int hours, string baseProcess = null, int watermarkSize = 0)
                 {
-                    var rawUrl = ossClient.GeneratePresignedUri(config.BucketName, key, DateTime.Now.AddHours(hours)).ToString();
+                    var request = new GeneratePresignedUriRequest(config.BucketName, key, SignHttpMethod.Get)
+                    {
+                        Expiration = DateTime.Now.AddHours(hours)
+                    };
+
+                    // 💡 只有选片模式且设定了字号时，才生成水印指令
+                    // 💡 抛弃有缺陷的 fill_1，采用“三点矩阵”全方位压印
+                    // t_25 保证了足够的显影浓度，同时又不会完全糊死人脸
+                    string watermarkAction = (mode == "select" && watermarkSize > 0)
+                        ? $"watermark,text_dGFuZ2lzbGUudG9w,color_FFFFFF,size_{watermarkSize},g_nw,x_50,y_50,t_75" +
+                          $"/watermark,text_dGFuZ2lzbGUudG9w,color_FFFFFF,size_{watermarkSize},g_center,t_55" +
+                          $"/watermark,text_dGFuZ2lzbGUudG9w,color_FFFFFF,size_{watermarkSize},g_se,x_50,y_50,t_75"
+                        : null;
+
+                    if (!string.IsNullOrEmpty(baseProcess) && !string.IsNullOrEmpty(watermarkAction))
+                    {
+                        request.Process = $"{baseProcess}/{watermarkAction}";
+                    }
+                    else if (!string.IsNullOrEmpty(baseProcess))
+                    {
+                        request.Process = baseProcess;
+                    }
+                    else if (!string.IsNullOrEmpty(watermarkAction))
+                    {
+                        request.Process = $"image/{watermarkAction}";
+                    }
+
+                    var rawUrl = ossClient.GeneratePresignedUri(request).ToString();
+
                     if (rawUrl.StartsWith("http://")) rawUrl = rawUrl.Replace("http://", "https://");
                     if (rawUrl.Contains("-internal.aliyuncs")) rawUrl = rawUrl.Replace("-internal.aliyuncs", ".aliyuncs");
                     return rawUrl;
                 }
 
-                // 💡 修复3：精准物理隔离。只有当来源是选片间(mode=select)且关闭了选片通道时，才隐藏照片。
                 bool hidePhotos = (mode == "select" && !albumRecord.CanSelect);
 
                 var photoList = !hidePhotos
                     ? allPhotos.Select(p => new
                     {
                         key = p,
-                        // 💡 修复1：移除了 "/thumbs/" 路径，统一使用原图，彻底消灭 404 的 X 号
-                        thumbUrl = GenerateSafeUrl($"{albumRecord.Id}/{p}", 2),
-                        displayUrl = GenerateSafeUrl($"{albumRecord.Id}/{p}", 2),
-                        downloadUrl = GenerateSafeUrl($"{albumRecord.Id}/{p}", 24)
+                        // 1. 缩略图 (约 500px)：使用较小的 20 号字
+                        thumbUrl = GenerateSafeUrl($"{albumRecord.Id}/{p}", 2, "image/resize,m_fill,w_500,h_500/quality,q_80", 20),
+
+                        // 2. 预览图 (约 1920px)：使用适中的 60 号字
+                        displayUrl = GenerateSafeUrl($"{albumRecord.Id}/{p}", 2, "image/resize,l_1920/quality,q_85", 60),
+
+                        // 3. 原图下载 (约 6000px)：使用超大的 200 号字！
+                        downloadUrl = GenerateSafeUrl($"{albumRecord.Id}/{p}", 24, null, 200)
                     }).ToList<object>()
                     : new List<object>();
 
